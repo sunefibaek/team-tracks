@@ -40,6 +40,14 @@ def test_get_recent_tracks(mock_spotify, mock_oauth):
     assert tracks[0]["played_at"] == "2025-10-03T12:00:00.000Z"
 
 
+@patch.dict(
+    os.environ,
+    {
+        "SPOTIFY_CLIENT_ID": "dummy_id",
+        "SPOTIFY_CLIENT_SECRET": "dummy_secret",
+        "SPOTIFY_REDIRECT_URI": "http://localhost:8888/callback",
+    },
+)
 def test_env_loading():
     # Check that environment variables are loaded
     assert os.getenv("SPOTIFY_CLIENT_ID") is not None

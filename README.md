@@ -2,6 +2,7 @@
 ![Static Badge](https://img.shields.io/badge/Spotify-grey?style=for-the-badge&logo=spotify&color=1ED760&logoColor=black)
 ![Static Badge](https://img.shields.io/badge/Python-grey?style=for-the-badge&logo=python&color=3776AB&logoColor=black)
 ![Static Badge](https://img.shields.io/badge/Streamlit-grey?style=for-the-badge&logo=streamlit&color=FF4B4B&logoColor=black)
+[![CI](https://github.com/sunefibaek/team-tracks/actions/workflows/ci.yml/badge.svg)](https://github.com/sunefibaek/team-tracks/actions/workflows/ci.yml)
 
 ## Setup Instructions
 
