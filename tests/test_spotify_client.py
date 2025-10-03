@@ -52,37 +52,67 @@ def test_get_recent_tracks(mock_spotify, mock_oauth):
 )
 @patch("src.spotify_client.SpotifyOAuth")
 @patch("src.spotify_client.spotipy.Spotify")
-def test_get_audio_features_batch(mock_spotify, mock_oauth):
-    """Test batch audio features retrieval."""
+def test_get_track_enriched_data_batch(mock_spotify, mock_oauth):
+    """Test batch enriched track data retrieval."""
     mock_instance = MagicMock()
-    mock_instance.audio_features.return_value = [
-        {
-            "id": "track1",
-            "acousticness": 0.5,
-            "danceability": 0.8,
-            "energy": 0.9,
-            "tempo": 120.0,
-            "valence": 0.7,
-        },
-        {
-            "id": "track2",
-            "acousticness": 0.3,
-            "danceability": 0.6,
-            "energy": 0.7,
-            "tempo": 100.0,
-            "valence": 0.5,
-        },
-    ]
+
+    # Mock tracks endpoint response
+    mock_instance.tracks.return_value = {
+        "tracks": [
+            {
+                "id": "track1",
+                "name": "Test Song 1",
+                "popularity": 75,
+                "duration_ms": 180000,
+                "explicit": False,
+                "album": {"release_date": "2023-01-15", "album_type": "album"},
+                "artists": [{"id": "artist1", "name": "Test Artist 1"}],
+            },
+            {
+                "id": "track2",
+                "name": "Test Song 2",
+                "popularity": 85,
+                "duration_ms": 200000,
+                "explicit": True,
+                "album": {
+                    "release_date": "2022-05-10",
+                    "album_type": "single",
+                },
+                "artists": [{"id": "artist2", "name": "Test Artist 2"}],
+            },
+        ]
+    }
+
+    # Mock artists endpoint response
+    mock_instance.artists.return_value = {
+        "artists": [
+            {
+                "id": "artist1",
+                "name": "Test Artist 1",
+                "genres": ["rock", "alternative rock"],
+                "popularity": 70,
+                "followers": {"total": 1000000},
+            },
+            {
+                "id": "artist2",
+                "name": "Test Artist 2",
+                "genres": ["pop", "dance"],
+                "popularity": 80,
+                "followers": {"total": 2000000},
+            },
+        ]
+    }
+
     mock_spotify.return_value = mock_instance
 
     client = SpotifyClient()
-    features = client.get_audio_features(["track1", "track2"])
+    enriched_data = client.get_track_enriched_data(["track1", "track2"])
 
-    assert len(features) == 2
-    assert features[0]["id"] == "track1"
-    assert features[0]["acousticness"] == 0.5
-    assert features[1]["id"] == "track2"
-    assert features[1]["danceability"] == 0.6
+    assert len(enriched_data) == 2
+    assert enriched_data[0]["id"] == "track1"
+    assert enriched_data[0]["popularity"] == 75
+    assert enriched_data[1]["id"] == "track2"
+    assert enriched_data[1]["popularity"] == 85
 
 
 @patch.dict(
@@ -95,28 +125,52 @@ def test_get_audio_features_batch(mock_spotify, mock_oauth):
 )
 @patch("src.spotify_client.SpotifyOAuth")
 @patch("src.spotify_client.spotipy.Spotify")
-def test_get_audio_features_single(mock_spotify, mock_oauth):
-    """Test single track audio features retrieval."""
+def test_get_track_enriched_data_single(mock_spotify, mock_oauth):
+    """Test single track enriched data retrieval."""
     mock_instance = MagicMock()
-    mock_instance.audio_features.return_value = [
-        {
-            "id": "track123",
-            "acousticness": 0.4,
-            "danceability": 0.7,
-            "energy": 0.8,
-            "tempo": 130.0,
-            "valence": 0.6,
-        }
-    ]
+
+    # Mock tracks endpoint response
+    mock_instance.tracks.return_value = {
+        "tracks": [
+            {
+                "id": "track123",
+                "name": "Test Song",
+                "popularity": 88,
+                "duration_ms": 210000,
+                "explicit": False,
+                "album": {"release_date": "2023-03-20", "album_type": "album"},
+                "artists": [{"id": "artist123", "name": "Test Artist"}],
+            }
+        ]
+    }
+
+    # Mock artists endpoint response
+    mock_instance.artists.return_value = {
+        "artists": [
+            {
+                "id": "artist123",
+                "name": "Test Artist",
+                "genres": ["indie rock", "alternative"],
+                "popularity": 65,
+                "followers": {"total": 500000},
+            }
+        ]
+    }
+
     mock_spotify.return_value = mock_instance
 
     client = SpotifyClient()
-    features = client.get_audio_features_single("track123")
+    enriched_data = client.get_track_enriched_data_single("track123")
 
-    assert features is not None
-    assert features["id"] == "track123"
-    assert features["acousticness"] == 0.4
-    assert features["tempo"] == 130.0
+    assert enriched_data is not None
+    assert enriched_data["id"] == "track123"
+    assert enriched_data["popularity"] == 88
+    assert enriched_data["duration_ms"] == 210000
+    assert len(enriched_data["artists"]) == 1
+    assert enriched_data["artists"][0]["genres"] == [
+        "indie rock",
+        "alternative",
+    ]
 
 
 @patch.dict(

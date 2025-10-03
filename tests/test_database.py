@@ -46,12 +46,12 @@ def test_database_models_initialization():
             ).fetchone()
             assert result is not None
 
-            # Check audio_features table
+            # Check enriched_track_data table (replaces audio_features)
             result = conn.execute(
                 """
                     SELECT table_name
                     FROM information_schema.tables
-                    WHERE table_name = 'audio_features'
+                    WHERE table_name = 'enriched_track_data'
                 """
             ).fetchone()
             assert result is not None
@@ -89,8 +89,8 @@ def test_save_and_retrieve_track():
         assert db_models.track_exists("nonexistent") is False
 
 
-def test_save_and_retrieve_audio_features():
-    """Test saving and retrieving audio features."""
+def test_save_and_retrieve_enriched_data():
+    """Test saving and retrieving enriched track data."""
     with tempfile.TemporaryDirectory() as temp_dir:
         db_path = os.path.join(temp_dir, "test.duckdb")
         db_conn = DatabaseConnection(db_path)
@@ -106,32 +106,27 @@ def test_save_and_retrieve_audio_features():
             played_at="2025-10-03T12:00:00.000Z",
         )
 
-        # Save audio features
-        features = {
-            "acousticness": 0.5,
-            "danceability": 0.8,
-            "energy": 0.9,
-            "instrumentalness": 0.1,
-            "liveness": 0.2,
-            "loudness": -5.0,
-            "speechiness": 0.05,
-            "tempo": 120.0,
-            "valence": 0.7,
-            "mode": 1,
-            "key": 4,
-            "time_signature": 4,
+        # Save enriched track data
+        enriched_data = {
+            "popularity": 75,
             "duration_ms": 180000,
+            "explicit": False,
+            "release_date": "2023-01-15",
+            "album_type": "album",
+            "genres": ["rock", "alternative rock"],
+            "artist_popularity": 68.5,
+            "artist_followers": 1000000,
         }
 
-        db_models.save_audio_features("test123", features)
+        db_models.save_enriched_track_data("test123", enriched_data)
 
-        # Check if audio features exist
-        assert db_models.audio_features_exist("test123") is True
-        assert db_models.audio_features_exist("nonexistent") is False
+        # Check if enriched track data exists
+        assert db_models.enriched_track_data_exist("test123") is True
+        assert db_models.enriched_track_data_exist("nonexistent") is False
 
 
 def test_get_recent_tracks():
-    """Test retrieving recent tracks with audio features."""
+    """Test retrieving recent tracks with enriched data."""
     with tempfile.TemporaryDirectory() as temp_dir:
         db_path = os.path.join(temp_dir, "test.duckdb")
         db_conn = DatabaseConnection(db_path)
@@ -139,9 +134,8 @@ def test_get_recent_tracks():
         db_models.initialize_database()
 
         # Save multiple tracks with different timestamps
-        # (most recent first in our expectation)
         timestamps = [
-            "2025-10-03T12:02:00.000Z",  # Most recent - will be tracks[0]
+            "2025-10-03T12:02:00.000Z",  # Most recent
             "2025-10-03T12:01:00.000Z",
             "2025-10-03T12:00:00.000Z",  # Oldest
         ]
@@ -155,16 +149,19 @@ def test_get_recent_tracks():
                 played_at=timestamps[i],
             )
 
-            # Save audio features for first two tracks (test0 and test1)
+            # Save enriched data for first two tracks (test0 and test1)
             if i < 2:
-                features = {
-                    "acousticness": 0.5 + i * 0.1,
-                    "danceability": 0.8,
-                    "energy": 0.9,
-                    "tempo": 120.0 + i * 10,
-                    "valence": 0.7,
+                enriched_data = {
+                    "popularity": 70 + i * 5,
+                    "duration_ms": 180000 + i * 1000,
+                    "explicit": i % 2 == 0,
+                    "release_date": f"202{i}-01-15",
+                    "album_type": "album",
+                    "genres": [f"genre{i}", "rock"],
+                    "artist_popularity": 65.0 + i * 2.5,
+                    "artist_followers": 1000000 + i * 100000,
                 }
-                db_models.save_audio_features(f"test{i}", features)
+                db_models.save_enriched_track_data(f"test{i}", enriched_data)
 
         # Get recent tracks
         tracks = db_models.get_recent_tracks(limit=3)
@@ -173,42 +170,51 @@ def test_get_recent_tracks():
         # Find tracks by ID since ordering might vary
         tracks_by_id = {track["id"]: track for track in tracks}
 
-        # Check that test0 and test1 have audio features, test2 doesn't
-        assert tracks_by_id["test0"]["acousticness"] is not None
-        assert tracks_by_id["test1"]["acousticness"] is not None
-        assert tracks_by_id["test2"]["acousticness"] is None
+        # Check that test0 and test1 have enriched data, test2 doesn't
+        assert tracks_by_id["test0"]["popularity"] is not None
+        assert tracks_by_id["test1"]["popularity"] is not None
+        assert tracks_by_id["test2"]["popularity"] is None
 
 
-def test_tracks_without_audio_features():
-    """Test finding tracks that don't have audio features."""
+def test_tracks_without_enriched_data():
+    """Test finding tracks that don't have enriched data."""
     with tempfile.TemporaryDirectory() as temp_dir:
         db_path = os.path.join(temp_dir, "test.duckdb")
         db_conn = DatabaseConnection(db_path)
         db_models = DatabaseModels(db_conn)
         db_models.initialize_database()
 
-        # Save tracks with and without audio features
+        # Save tracks with and without enriched data
         db_models.save_track(
-            "with_features",
+            "with_enriched_data",
             "Song 1",
             "Artist 1",
             "Album 1",
             "2025-10-03T12:00:00.000Z",
         )
         db_models.save_track(
-            "without_features",
+            "without_enriched_data",
             "Song 2",
             "Artist 2",
             "Album 2",
             "2025-10-03T12:01:00.000Z",
         )
 
-        # Add features only for first track
-        features = {"acousticness": 0.5, "danceability": 0.8}
-        db_models.save_audio_features("with_features", features)
+        # Add enriched data only for first track
+        enriched_data = {
+            "popularity": 80,
+            "duration_ms": 200000,
+            "explicit": False,
+            "release_date": "2023-05-10",
+            "album_type": "single",
+            "genres": ["pop", "dance"],
+            "artist_popularity": 85.0,
+            "artist_followers": 2000000,
+        }
+        db_models.save_enriched_track_data("with_enriched_data", enriched_data)
 
-        # Check tracks without features
-        missing = db_models.get_tracks_without_audio_features()
+        # Check tracks without enriched data
+        missing = db_models.get_tracks_without_enriched_data()
         assert len(missing) == 1
-        assert "without_features" in missing
-        assert "with_features" not in missing
+        assert "without_enriched_data" in missing
+        assert "with_enriched_data" not in missing
