@@ -1,7 +1,8 @@
 import streamlit as st
+
 from spotify_client import SpotifyClient
 
-st.title('Spotify Recently Played Tracks')
+st.title("Spotify Recently Played Tracks")
 
 try:
     client = SpotifyClient()
@@ -11,7 +12,6 @@ try:
             st.write(f"**{t['name']}** by {t['artist']} (Album: {t['album']})")
             st.caption(f"Played at: {t['played_at']}")
     else:
-        st.info('No recently played tracks found.')
+        st.info("No recently played tracks found.")
 except Exception as e:
-    st.error(f'Error: {e}')
-
+    st.error(f"Error: {e}")
