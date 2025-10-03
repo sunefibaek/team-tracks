@@ -25,6 +25,7 @@ def import_fresh_streamlit_app():
     # Remove the module from sys.modules to force re-import
     sys.modules.pop("src.streamlit_app", None)
     importlib.invalidate_caches()
+    import src.streamlit_app  # noqa: F401
 
 
 def test_streamlit_app_runs(monkeypatch):
