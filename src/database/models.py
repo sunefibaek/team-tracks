@@ -1,4 +1,5 @@
-# import json
+import json
+
 # from datetime import datetime
 from typing import Dict, List  # , Optional
 
@@ -26,24 +27,19 @@ class DatabaseModels:
             """
             )
 
-            # Create audio_features table
+            # Create enriched_track_data table (replaces audio_features)
             conn.execute(
                 """
-                CREATE TABLE IF NOT EXISTS audio_features (
+                CREATE TABLE IF NOT EXISTS enriched_track_data (
                     track_id TEXT PRIMARY KEY,
-                    acousticness REAL,
-                    danceability REAL,
-                    energy REAL,
-                    instrumentalness REAL,
-                    liveness REAL,
-                    loudness REAL,
-                    speechiness REAL,
-                    tempo REAL,
-                    valence REAL,
-                    mode INTEGER,
-                    key INTEGER,
-                    time_signature INTEGER,
+                    popularity INTEGER,
                     duration_ms INTEGER,
+                    explicit BOOLEAN,
+                    release_date TEXT,
+                    album_type TEXT,
+                    genres JSON, -- Array of genres from all artists
+                    artist_popularity REAL, -- Average artist popularity
+                    artist_followers INTEGER, -- Total artist followers
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (track_id) REFERENCES tracks(id)
                 )
@@ -77,48 +73,41 @@ class DatabaseModels:
                 [track_id, name, artist, album, played_at],
             )
 
-    def save_audio_features(self, track_id: str, features: Dict):
-        """Save audio features for a track."""
+    def save_enriched_track_data(self, track_id: str, data: Dict):
+        """Save enriched track data."""
         with self.db as conn:
             conn.execute(
                 """
-                INSERT OR REPLACE INTO audio_features (
-                    track_id, acousticness, danceability,
-                    energy, instrumentalness, liveness,
-                    loudness, speechiness, tempo, valence,
-                    mode, key, time_signature, duration_ms
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT OR REPLACE INTO enriched_track_data (
+                    track_id, popularity, duration_ms,
+                    explicit, release_date, album_type,
+                    genres, artist_popularity, artist_followers
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
                 [
                     track_id,
-                    features.get("acousticness"),
-                    features.get("danceability"),
-                    features.get("energy"),
-                    features.get("instrumentalness"),
-                    features.get("liveness"),
-                    features.get("loudness"),
-                    features.get("speechiness"),
-                    features.get("tempo"),
-                    features.get("valence"),
-                    features.get("mode"),
-                    features.get("key"),
-                    features.get("time_signature"),
-                    features.get("duration_ms"),
+                    data.get("popularity"),
+                    data.get("duration_ms"),
+                    data.get("explicit"),
+                    data.get("release_date"),
+                    data.get("album_type"),
+                    json.dumps(data.get("genres")),  # Store genres as JSON
+                    data.get("artist_popularity"),
+                    data.get("artist_followers"),
                 ],
             )
 
     def get_recent_tracks(self, limit: int = 7) -> List[Dict]:
-        """Get the most recent tracks with their audio features."""
+        """Get the most recent tracks with their enriched data."""
         with self.db as conn:
             result = conn.execute(
                 """
                 SELECT t.id, t.name, t.artist, t.album, t.played_at,
-                       af.acousticness, af.danceability, af.energy,
-                       af.instrumentalness, af.liveness, af.loudness,
-                       af.speechiness, af.tempo, af.valence, af.mode,
-                       af.key, af.time_signature, af.duration_ms
+                       et.popularity, et.duration_ms, et.explicit,
+                       et.release_date, et.album_type, et.genres,
+                       et.artist_popularity, et.artist_followers
                 FROM tracks t
-                LEFT JOIN audio_features af ON t.id = af.track_id
+                LEFT JOIN enriched_track_data et ON t.id = et.track_id
                 ORDER BY t.played_at DESC
                 LIMIT ?
             """,
@@ -136,23 +125,24 @@ class DatabaseModels:
             )
             return result.fetchone() is not None
 
-    def audio_features_exist(self, track_id: str) -> bool:
-        """Check if audio features exist for a track."""
+    def enriched_track_data_exist(self, track_id: str) -> bool:
+        """Check if enriched track data exists for a track."""
         with self.db as conn:
             result = conn.execute(
-                "SELECT 1 FROM audio_features WHERE track_id = ?", [track_id]
+                "SELECT 1 FROM enriched_track_data WHERE track_id = ?",
+                [track_id],
             )
             return result.fetchone() is not None
 
-    def get_tracks_without_audio_features(self) -> List[str]:
-        """Get track IDs that don't have audio features yet."""
+    def get_tracks_without_enriched_data(self) -> List[str]:
+        """Get track IDs that don't have enriched data yet."""
         with self.db as conn:
             result = conn.execute(
                 """
                 SELECT t.id
                 FROM tracks t
-                LEFT JOIN audio_features af ON t.id = af.track_id
-                WHERE af.track_id IS NULL
+                LEFT JOIN enriched_track_data et ON t.id = et.track_id
+                WHERE et.track_id IS NULL
             """
             )
             return [row[0] for row in result.fetchall()]

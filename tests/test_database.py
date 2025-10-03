@@ -39,9 +39,9 @@ def test_database_models_initialization():
             # Check tracks table
             result = conn.execute(
                 """
-                    SELECT name
-                    FROM sqlite_master
-                    WHERE type='table' AND name='tracks'
+                    SELECT table_name
+                    FROM information_schema.tables
+                    WHERE table_name = 'tracks'
                 """
             ).fetchone()
             assert result is not None
@@ -49,9 +49,9 @@ def test_database_models_initialization():
             # Check audio_features table
             result = conn.execute(
                 """
-                    SELECT name
-                    FROM sqlite_master
-                    WHERE type='table' AND name='audio_features'
+                    SELECT table_name
+                    FROM information_schema.tables
+                    WHERE table_name = 'audio_features'
                 """
             ).fetchone()
             assert result is not None
@@ -59,9 +59,9 @@ def test_database_models_initialization():
             # Check user_profiles table
             result = conn.execute(
                 """
-                    SELECT name
-                    FROM sqlite_master
-                    WHERE type='table' AND name='user_profiles'
+                    SELECT table_name
+                    FROM information_schema.tables
+                    WHERE table_name = 'user_profiles'
                 """
             ).fetchone()
             assert result is not None
