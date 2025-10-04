@@ -89,10 +89,14 @@ class DatabaseModels:
         with self.db as conn:
             conn.execute(
                 """
-                INSERT OR REPLACE INTO users (
-                user_id, display_name, spotify_user_id, preferences
+                INSERT INTO users (
+                    user_id, display_name, spotify_user_id, preferences
                 )
                 VALUES (?, ?, ?, ?)
+                ON CONFLICT(user_id) DO UPDATE SET
+                    display_name=excluded.display_name,
+                    spotify_user_id=excluded.spotify_user_id,
+                    preferences=excluded.preferences
                 """,
                 [
                     user_id,
@@ -154,7 +158,24 @@ class DatabaseModels:
         with self.db as conn:
             cur = conn.execute(
                 """
-                SELECT t.*, e.* FROM tracks t
+                SELECT
+                    t.id as track_id,
+                    t.user_id as t_user_id,
+                    t.name as track_name,
+                    t.artist as track_artist,
+                    t.album as track_album,
+                    t.played_at as track_played_at,
+                    t.created_at as track_created_at,
+                    e.popularity as enriched_popularity,
+                    e.duration_ms as enriched_duration_ms,
+                    e.explicit as enriched_explicit,
+                    e.release_date as enriched_release_date,
+                    e.album_type as enriched_album_type,
+                    e.genres as enriched_genres,
+                    e.artist_popularity as enriched_artist_popularity,
+                    e.artist_followers as enriched_artist_followers,
+                    e.created_at as enriched_created_at
+                FROM tracks t
                 LEFT JOIN enriched_track_data e ON t.id = e.track_id
                     AND t.user_id = e.user_id
                 WHERE t.user_id = ?
@@ -163,8 +184,9 @@ class DatabaseModels:
                 """,
                 [user_id, limit],
             )
+            colnames = [desc[0] for desc in cur.description]
             rows = cur.fetchall()
-            return [dict(row) for row in rows]
+            return [dict(zip(colnames, row)) for row in rows]
 
     def track_exists(self, track_id: str) -> bool:
         """Check if a track exists in the database."""

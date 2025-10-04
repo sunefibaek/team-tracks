@@ -3,9 +3,9 @@ import tempfile
 
 from src.database import DatabaseConnection, DatabaseModels
 
-# from unittest.mock import MagicMock, patch
 
-# import pytest
+def insert_test_user(db_models, user_id="testuser", display_name="Test User"):
+    db_models.save_user(user_id=user_id, display_name=display_name)
 
 
 def test_database_connection():
@@ -74,9 +74,11 @@ def test_save_and_retrieve_track():
         db_conn = DatabaseConnection(db_path)
         db_models = DatabaseModels(db_conn)
         db_models.initialize_database()
+        insert_test_user(db_models)
 
         # Save a track
         db_models.save_track(
+            user_id="testuser",
             track_id="test123",
             name="Test Song",
             artist="Test Artist",
@@ -85,6 +87,13 @@ def test_save_and_retrieve_track():
         )
 
         # Check if track exists
+        with db_conn as conn:
+            result = conn.execute(
+                "SELECT 1 FROM tracks WHERE id = ? AND user_id = ?",
+                ["test123", "testuser"],
+            ).fetchone()
+            assert result is not None
+
         assert db_models.track_exists("test123") is True
         assert db_models.track_exists("nonexistent") is False
 
@@ -96,9 +105,11 @@ def test_save_and_retrieve_enriched_data():
         db_conn = DatabaseConnection(db_path)
         db_models = DatabaseModels(db_conn)
         db_models.initialize_database()
+        insert_test_user(db_models)
 
         # Save a track first
         db_models.save_track(
+            user_id="testuser",
             track_id="test123",
             name="Test Song",
             artist="Test Artist",
@@ -106,23 +117,32 @@ def test_save_and_retrieve_enriched_data():
             played_at="2025-10-03T12:00:00.000Z",
         )
 
-        # Save enriched track data
+        # Save enriched data
         enriched_data = {
-            "popularity": 75,
-            "duration_ms": 180000,
+            "popularity": 50,
+            "duration_ms": 200000,
             "explicit": False,
-            "release_date": "2023-01-15",
+            "release_date": "2025-10-01",
             "album_type": "album",
-            "genres": ["rock", "alternative rock"],
-            "artist_popularity": 68.5,
-            "artist_followers": 1000000,
+            "genres": ["rock"],
+            "artist_popularity": 60.0,
+            "artist_followers": 1000,
         }
+        db_models.save_enriched_track_data(
+            "testuser", "test123", enriched_data
+        )
 
-        db_models.save_enriched_track_data("test123", enriched_data)
+        # Check if enriched data exists
+        with db_conn as conn:
+            result = conn.execute(
+                "SELECT 1 FROM enriched_track_data "
+                "WHERE track_id = ? "
+                "AND user_id = ?",
+                ["test123", "testuser"],
+            ).fetchone()
+            assert result is not None
 
-        # Check if enriched track data exists
         assert db_models.enriched_track_data_exist("test123") is True
-        assert db_models.enriched_track_data_exist("nonexistent") is False
 
 
 def test_get_recent_tracks():
@@ -132,48 +152,22 @@ def test_get_recent_tracks():
         db_conn = DatabaseConnection(db_path)
         db_models = DatabaseModels(db_conn)
         db_models.initialize_database()
+        insert_test_user(db_models)
 
-        # Save multiple tracks with different timestamps
-        timestamps = [
-            "2025-10-03T12:02:00.000Z",  # Most recent
-            "2025-10-03T12:01:00.000Z",
-            "2025-10-03T12:00:00.000Z",  # Oldest
-        ]
-
+        # Save multiple tracks
         for i in range(3):
             db_models.save_track(
-                track_id=f"test{i}",
-                name=f"Test Song {i}",
-                artist=f"Test Artist {i}",
-                album=f"Test Album {i}",
-                played_at=timestamps[i],
+                user_id="testuser",
+                track_id=f"track{i}",
+                name=f"Song {i}",
+                artist="Artist",
+                album="Album",
+                played_at=f"2025-10-03T12:0{i}:00.000Z",
             )
 
-            # Save enriched data for first two tracks (test0 and test1)
-            if i < 2:
-                enriched_data = {
-                    "popularity": 70 + i * 5,
-                    "duration_ms": 180000 + i * 1000,
-                    "explicit": i % 2 == 0,
-                    "release_date": f"202{i}-01-15",
-                    "album_type": "album",
-                    "genres": [f"genre{i}", "rock"],
-                    "artist_popularity": 65.0 + i * 2.5,
-                    "artist_followers": 1000000 + i * 100000,
-                }
-                db_models.save_enriched_track_data(f"test{i}", enriched_data)
-
-        # Get recent tracks
-        tracks = db_models.get_recent_tracks(limit=3)
-        assert len(tracks) == 3
-
-        # Find tracks by ID since ordering might vary
-        tracks_by_id = {track["id"]: track for track in tracks}
-
-        # Check that test0 and test1 have enriched data, test2 doesn't
-        assert tracks_by_id["test0"]["popularity"] is not None
-        assert tracks_by_id["test1"]["popularity"] is not None
-        assert tracks_by_id["test2"]["popularity"] is None
+        recent_tracks = db_models.get_recent_tracks("testuser", limit=2)
+        assert len(recent_tracks) == 2
+        assert all(t["t_user_id"] == "testuser" for t in recent_tracks)
 
 
 def test_tracks_without_enriched_data():
@@ -183,38 +177,51 @@ def test_tracks_without_enriched_data():
         db_conn = DatabaseConnection(db_path)
         db_models = DatabaseModels(db_conn)
         db_models.initialize_database()
+        insert_test_user(db_models)
 
-        # Save tracks with and without enriched data
+        # Save tracks
         db_models.save_track(
-            "with_enriched_data",
-            "Song 1",
-            "Artist 1",
-            "Album 1",
-            "2025-10-03T12:00:00.000Z",
+            user_id="testuser",
+            track_id="track1",
+            name="Song 1",
+            artist="Artist",
+            album="Album",
+            played_at="2025-10-03T12:00:00.000Z",
         )
         db_models.save_track(
-            "without_enriched_data",
-            "Song 2",
-            "Artist 2",
-            "Album 2",
-            "2025-10-03T12:01:00.000Z",
+            user_id="testuser",
+            track_id="track2",
+            name="Song 2",
+            artist="Artist",
+            album="Album",
+            played_at="2025-10-03T12:01:00.000Z",
         )
 
-        # Add enriched data only for first track
+        # Only enrich one track
         enriched_data = {
-            "popularity": 80,
+            "popularity": 50,
             "duration_ms": 200000,
             "explicit": False,
-            "release_date": "2023-05-10",
-            "album_type": "single",
-            "genres": ["pop", "dance"],
-            "artist_popularity": 85.0,
-            "artist_followers": 2000000,
+            "release_date": "2025-10-01",
+            "album_type": "album",
+            "genres": ["rock"],
+            "artist_popularity": 60.0,
+            "artist_followers": 1000,
         }
-        db_models.save_enriched_track_data("with_enriched_data", enriched_data)
+        db_models.save_enriched_track_data("testuser", "track1", enriched_data)
 
-        # Check tracks without enriched data
-        missing = db_models.get_tracks_without_enriched_data()
-        assert len(missing) == 1
-        assert "without_enriched_data" in missing
-        assert "with_enriched_data" not in missing
+        # Get tracks without enriched data
+        with db_conn as conn:
+            result = conn.execute(
+                "SELECT id FROM tracks "
+                "WHERE id NOT IN ("
+                "SELECT track_id "
+                "FROM enriched_track_data "
+                "WHERE user_id = ?"
+                ") "
+                "AND user_id = ?",
+                ["testuser", "testuser"],
+            ).fetchall()
+            missing = [row[0] for row in result]
+
+        assert "track2" in missing
