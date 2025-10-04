@@ -62,3 +62,6 @@ venv/
 
 # macOS
 .DS_Store
+
+# Local plan
+.plan/
