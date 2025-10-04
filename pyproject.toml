@@ -29,6 +29,7 @@ flake8 = "^7.3.0"
 black = "^25.9.0"
 pytest-cov = "^7.0.0"
 flake8-pyproject = "^1.2.3"
+pre-commit = "^4.3.0"
 
 [tool.black]
 line-length = 79

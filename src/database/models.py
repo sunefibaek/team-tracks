@@ -11,40 +11,60 @@ class DatabaseModels:
     def initialize_database(self):
         """Create all necessary tables."""
         with self.db as conn:
-            # Create tracks table
+            # Create users table
             conn.execute(
                 """
-                CREATE TABLE IF NOT EXISTS tracks (
-                    id TEXT PRIMARY KEY,
-                    name TEXT,
-                    artist TEXT,
-                    album TEXT,
-                    played_at TIMESTAMP,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                CREATE TABLE IF NOT EXISTS users (
+                    user_id TEXT PRIMARY KEY,
+                    display_name TEXT NOT NULL,
+                    spotify_user_id TEXT UNIQUE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    preferences JSON
                 )
             """
             )
 
-            # Create enriched_track_data table (replaces audio_features)
+            # Create tracks table (with user_id)
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS tracks (
+                    id TEXT,
+                    user_id TEXT,
+                    name TEXT,
+                    artist TEXT,
+                    album TEXT,
+                    played_at TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (id, user_id),
+                    FOREIGN KEY (user_id) REFERENCES users(user_id)
+                )
+            """
+            )
+
+            # Create enriched_track_data table (with user_id)
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS enriched_track_data (
-                    track_id TEXT PRIMARY KEY,
+                    track_id TEXT,
+                    user_id TEXT,
                     popularity INTEGER,
                     duration_ms INTEGER,
                     explicit BOOLEAN,
                     release_date TEXT,
                     album_type TEXT,
-                    genres JSON, -- Array of genres from all artists
-                    artist_popularity REAL, -- Average artist popularity
-                    artist_followers INTEGER, -- Total artist followers
+                    genres JSON,
+                    artist_popularity REAL,
+                    artist_followers INTEGER,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (track_id) REFERENCES tracks(id)
+                    PRIMARY KEY (track_id, user_id),
+                    FOREIGN KEY (track_id, user_id)
+                    REFERENCES tracks(id, user_id)
                 )
             """
             )
 
-            # Create user_profiles table
+            # Create user_profiles table (already has user_id)
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS user_profiles (
@@ -52,68 +72,99 @@ class DatabaseModels:
                     profile_data JSON,
                     based_on_tracks JSON,
                     calculated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    track_count INTEGER DEFAULT 7
+                    track_count INTEGER DEFAULT 7,
+                    FOREIGN KEY (user_id) REFERENCES users(user_id)
                 )
             """
             )
 
-    def save_track(
-        self, track_id: str, name: str, artist: str, album: str, played_at: str
+    def save_user(
+        self,
+        user_id: str,
+        display_name: str,
+        spotify_user_id: str = None,
+        preferences: Dict = None,
     ):
-        """Save a track to the database."""
+        """Save a user to the database."""
+        with self.db as conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO users (
+                user_id, display_name, spotify_user_id, preferences
+                )
+                VALUES (?, ?, ?, ?)
+                """,
+                [
+                    user_id,
+                    display_name,
+                    spotify_user_id,
+                    json.dumps(preferences or {}),
+                ],
+            )
+
+    def save_track(
+        self,
+        user_id: str,
+        track_id: str,
+        name: str,
+        artist: str,
+        album: str,
+        played_at: str,
+    ):
+        """Save a track to the database for a user."""
         with self.db as conn:
             conn.execute(
                 """
                 INSERT OR REPLACE INTO tracks
-                (id, name, artist, album, played_at)
-                VALUES (?, ?, ?, ?, ?)
-            """,
-                [track_id, name, artist, album, played_at],
+                (id, user_id, name, artist, album, played_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                [track_id, user_id, name, artist, album, played_at],
             )
 
-    def save_enriched_track_data(self, track_id: str, data: Dict):
-        """Save enriched track data."""
+    def save_enriched_track_data(
+        self, user_id: str, track_id: str, data: Dict
+    ):
+        """Save enriched track data for a user."""
         with self.db as conn:
             conn.execute(
                 """
                 INSERT OR REPLACE INTO enriched_track_data (
-                    track_id, popularity, duration_ms,
+                    track_id, user_id, popularity, duration_ms,
                     explicit, release_date, album_type,
                     genres, artist_popularity, artist_followers
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
                 [
                     track_id,
+                    user_id,
                     data.get("popularity"),
                     data.get("duration_ms"),
                     data.get("explicit"),
                     data.get("release_date"),
                     data.get("album_type"),
-                    json.dumps(data.get("genres")),  # Store genres as JSON
+                    json.dumps(data.get("genres")),
                     data.get("artist_popularity"),
                     data.get("artist_followers"),
                 ],
             )
 
-    def get_recent_tracks(self, limit: int = 7) -> List[Dict]:
-        """Get the most recent tracks with their enriched data."""
+    def get_recent_tracks(self, user_id: str, limit: int = 7) -> List[Dict]:
+        """Get the most recent tracks for a user with their enriched data."""
         with self.db as conn:
-            result = conn.execute(
+            cur = conn.execute(
                 """
-                SELECT t.id, t.name, t.artist, t.album, t.played_at,
-                       et.popularity, et.duration_ms, et.explicit,
-                       et.release_date, et.album_type, et.genres,
-                       et.artist_popularity, et.artist_followers
-                FROM tracks t
-                LEFT JOIN enriched_track_data et ON t.id = et.track_id
+                SELECT t.*, e.* FROM tracks t
+                LEFT JOIN enriched_track_data e ON t.id = e.track_id
+                    AND t.user_id = e.user_id
+                WHERE t.user_id = ?
                 ORDER BY t.played_at DESC
                 LIMIT ?
-            """,
-                [limit],
+                """,
+                [user_id, limit],
             )
-
-            columns = [desc[0] for desc in result.description]
-            return [dict(zip(columns, row)) for row in result.fetchall()]
+            rows = cur.fetchall()
+            return [dict(row) for row in rows]
 
     def track_exists(self, track_id: str) -> bool:
         """Check if a track exists in the database."""

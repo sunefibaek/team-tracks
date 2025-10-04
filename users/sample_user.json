@@ -1,0 +1,16 @@
+{
+  "user_id": "sample_user",
+  "display_name": "Sample User",
+  "spotify_credentials": {
+    "client_id": "sample_client_id",
+    "client_secret": "sample_client_secret",
+    "redirect_uri": "http://localhost:8888/callback"
+  },
+  "preferences": {
+    "track_limit": 7,
+    "auto_refresh": true
+  },
+  "created_at": "2025-10-04T10:00:00Z",
+  "last_active": "2025-10-04T10:00:00Z"
+}
+
